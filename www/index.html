@@ -1,0 +1,85 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Family Medicine</title>
+<style>
+body{font-family:sans-serif;margin:0;background:#f4f4f4;color:#222}
+#top{background:#2e7d32;color:#fff;padding:12px;font-size:18px}
+#tabs{display:flex;background:#1b5e20}#tabs button{flex:1;padding:10px 2px;border:0;background:none;color:#fff;font-size:13px}#tabs .a{background:#43a047}
+#v{padding:10px;padding-bottom:60px}.c{background:#fff;border-radius:6px;padding:10px;margin-bottom:10px;box-shadow:0 1px 2px #0003}
+.r{border-top:1px solid #eee;padding:6px 0}button.b{margin:3px 3px 0 0;padding:6px 8px;border:1px solid #888;border-radius:4px;background:#fafafa}
+.ok{color:#2e7d32}.bad{color:#c62828}.w{color:#ef6c00}input,select{padding:6px;margin:3px 0;width:100%;box-sizing:border-box}
+.bar{display:inline-block;width:6%;margin-right:1%;background:#43a047;vertical-align:bottom}.bw{height:60px;display:flex;align-items:flex-end}
+#ov{display:none;position:fixed;inset:0;background:#b71c1c;color:#fff;z-index:9;overflow:auto;padding:14px}
+#ov h1{text-align:center;font-size:34px;margin:10px 0}#ov .c{color:#222}#ov button.b{font-size:15px;padding:10px}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head><body>
+<div id="top">Family Medicine <small id="clk"></small></div><div id="tabs"></div><div id="v"></div><div id="ov"></div>
+<script>
+// ---- OPTIONAL live sync between phones: paste your Firebase web config here (see README steps) ----
+const FB={apiKey:"AIzaSyDd1KQ_46SyW3vX3ojFvEFyxTf6dY9bhF8",authDomain:"family-medicine-651eb.firebaseapp.com",projectId:"family-medicine-651eb",storageBucket:"family-medicine-651eb.firebasestorage.app",messagingSenderId:"681223357667",appId:"1:681223357667:web:e3a5ff3fb3c06ccbf671d6"}
+const IST='Asia/Kolkata',$=id=>document.getElementById(id);
+const dk=(d=new Date())=>d.toLocaleDateString('en-CA',{timeZone:IST});
+const nowM=()=>{const p=new Date().toLocaleTimeString('en-GB',{timeZone:IST,hour12:false}).split(':');return +p[0]*60+ +p[1]};
+const tm=s=>{const a=s.split(':');return +a[0]*60+ +a[1]};
+const back=i=>dk(new Date(Date.now()-i*864e5));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function seed(){const t=dk();let n=1;const M=[['amar','Amar Thakar'],['lilam','Lilam Thakar'],['madhu','Madhusudan Thakar']];
+ const D=[['amar','NEWTEL 40','23:00','before sleeping'],['lilam','BEPLEX CZS','10:30','after breakfast'],['lilam','ASOMEX S','13:30','before lunch'],['lilam','ISRYL-M1','14:30','after lunch'],['lilam','MBSOL-SL','21:30','after dinner'],['lilam','ROSULESS-10','21:30','after dinner'],['madhu','Amlokind AT','21:30','after dinner'],['madhu','TAMLOMIN 0.4','21:30','after dinner']];
+ const meds=D.map(d=>({id:n++,m:d[0],n:d[1],t:d[2],w:d[3],from:t,on:true}));
+ M.forEach(m=>meds.push({id:n++,m:m[0],n:'Vitamin D',t:'09:00',w:'every 15 days',every:15,from:t,on:true}));
+ return{members:M.map(m=>({id:m[0],name:m[1]})),meds,logs:{},nid:n,ts:1}}
+let S=JSON.parse(localStorage.S||'null')||seed(),P=JSON.parse(localStorage.P||'{}'),tab='today',lastDay=dk(),db;
+const pf=id=>Object.assign({notify:true,alarm:true,popup:true},P[id]);
+const nm=id=>(S.members.find(m=>m.id===id)||{name:'?'}).name;
+function persist(struct){if(struct)S.ts=Date.now();localStorage.S=JSON.stringify(S);localStorage.P=JSON.stringify(P);push();render();if(struct)sched()}
+function push(){if(db)db.doc('family/main').set({j:JSON.stringify(S)}).catch(()=>{})}
+function merge(R){for(const d in R.logs){S.logs[d]=S.logs[d]||{};for(const k in R.logs[d]){const a=S.logs[d][k],b=R.logs[d][k];if(!a||b.t>a.t)S.logs[d][k]=b}}
+ if(R.ts>S.ts){S.members=R.members;S.meds=R.meds;S.nid=Math.max(S.nid,R.nid);S.ts=R.ts;sched()}localStorage.S=JSON.stringify(S);render()}
+function initSync(){if(!FB||!window.firebase)return;try{firebase.initializeApp(FB);db=firebase.firestore();
+ db.doc('family/main').onSnapshot(s=>{if(s.exists&&!s.metadata.hasPendingWrites)merge(JSON.parse(s.data().j))});push()}catch(e){}}
+const isDue=(m,d)=>{if(d<m.from||(m.off&&d>=m.off))return false;return m.every?Math.round((Date.parse(d)-Date.parse(m.from))/864e5)%m.every===0:true};
+const dueOn=d=>S.meds.filter(m=>isDue(m,d)).sort((a,b)=>tm(a.t)-tm(b.t));
+const lg=(id,d=dk())=>(S.logs[d]||{})[id];
+const done=l=>l&&(l.s==='taken'||l.s==='taking');
+function mark(id,s,d=dk()){S.logs[d]=S.logs[d]||{};S.logs[d][id]={s,t:Date.now(),hm:nowM()};persist(false);popup()}
+const stat=(m)=>{const l=lg(m.id);return l?({taken:'<span class=ok>✔ Taken</span>',taking:'<span class=ok>✔ Taking</span>',later:'<span class=w>⏳ Will take later</span>'})[l.s]:(tm(m.t)<nowM()?'<span class=bad>Pending</span>':'Upcoming')};
+const btns=m=>`<button class=b onclick="mark(${m.id},'taken')">Already taken</button><button class=b onclick="mark(${m.id},'taking')">Taking</button><button class=b onclick="mark(${m.id},'later')">Will take later</button>`;
+function vToday(){const d=dueOn(dk());return S.members.map(M=>{const L=d.filter(m=>m.m===M.id),k=L.filter(m=>done(lg(m.id))).length;
+ return`<div class=c><b>${esc(M.name)}</b> — ${k}/${L.length} taken today`+L.map(m=>`<div class=r>${m.t} · <b>${esc(m.n)}</b> <small>${esc(m.w)}</small><br>${stat(m)}<br>${btns(m)}</div>`).join('')+'</div>'}).join('')}
+function rep(id){let sch=0,tk=0,ot=0,days=[],streak=0,broke=false;
+ for(let i=13;i>=0;i--){const d=back(i);let s=0,t=0;dueOn(d).filter(m=>m.m===id).forEach(m=>{if(i===0&&tm(m.t)>nowM())return;s++;const l=lg(m.id,d);if(done(l)){t++;if(l.hm-tm(m.t)<=60||dk(new Date(l.t))!==d)ot++}});sch+=s;tk+=t;days.push(s?t/s:null)}
+ for(let i=1;i<14&&!broke;i++){const x=days[13-i];if(x===null)continue;if(x===1)streak++;else broke=true}
+ return{acc:sch?Math.round(tk/sch*100):0,ot:tk?Math.round(ot/tk*100):0,streak,days,sch,tk}}
+function vReport(){return S.members.map(M=>{const r=rep(M.id);return`<div class=c><b>${esc(M.name)}</b> (last 14 days)<br>Habit streak: <b>${r.streak}</b> perfect days<br>Accuracy (doses taken): <b>${r.acc}%</b> (${r.tk}/${r.sch})<br>On-time taking: <b>${r.ot}%</b><div class=bw>${r.days.map(x=>`<span class=bar style="height:${x===null?2:Math.max(3,x*60)}px;${x!==null&&x<1?'background:#ef6c00':''}"></span>`).join('')}</div><small>Daily completion, oldest → today</small></div>`}).join('')}
+function vMeds(){return S.members.map(M=>`<div class=c><b>${esc(M.name)}</b>`+S.meds.filter(m=>m.m===M.id&&m.on&&(!m.off||m.off>dk())).map(m=>`<div class=r>${m.t} · ${esc(m.n)} <small>${esc(m.w)}</small> <button class=b onclick="stop(${m.id})">Dismiss</button></div>`).join('')+'</div>').join('')+
+ `<div class=c><b>Add medicine</b><select id=am>${S.members.map(m=>`<option value=${m.id}>${esc(m.name)}</option>`).join('')}</select><input id=an placeholder="Medicine name"><input id=at type=time value="09:00"><input id=aw placeholder="When (e.g. after breakfast)"><input id=ae type=number placeholder="Repeat every N days (blank = daily)"><button class=b onclick=addMed()>Add</button></div>
+ <div class=c><b>Add family member</b><input id=nn placeholder="Member name"><button class=b onclick=addMem()>Add member</button></div>`}
+function stop(id){if(!confirm('Stop this medicine from today? History is kept.'))return;S.meds.find(m=>m.id===id).off=dk();persist(true)}
+function addMed(){const n=$('an').value.trim();if(!n)return alert('Enter name');S.meds.push({id:S.nid++,m:$('am').value,n,t:$('at').value||'09:00',w:$('aw').value,every:+$('ae').value||0,from:dk(),on:true});persist(true)}
+function addMem(){const n=$('nn').value.trim();if(!n)return;S.members.push({id:'m'+Date.now(),name:n});persist(true)}
+function vSet(){return`<div class=c><b>Alerts on THIS phone</b><br><small>Notify = reminder notification. Strict alarm = loud high-priority alarm channel. Popup = full-screen MEDICINE TIME screen with 3 options (works even if alarm is off).</small></div>`+S.members.map(M=>{const p=pf(M.id);const c=(k,l)=>`<label><input type=checkbox style="width:auto" ${p[k]?'checked':''} onchange="setP('${M.id}','${k}',this.checked)"> ${l}</label><br>`;return`<div class=c><b>${esc(M.name)}</b><br>${c('notify','Notify')}${c('alarm','Strict alarm')}${c('popup','Popup (3 options)')}</div>`}).join('')+`<div class=c>Live sync: ${db?'ON':'OFF (local only)'}</div>`}
+function setP(id,k,v){P[id]=Object.assign(pf(id),{[k]:v});persist(true)}
+function render(){const T=[['today','Today'],['report','Report'],['meds','Medicines'],['set','Alerts']];$('tabs').innerHTML=T.map(t=>`<button class="${t[0]===tab?'a':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('');
+ if(!document.activeElement||!/INPUT|SELECT/.test(document.activeElement.tagName))$('v').innerHTML=({today:vToday,report:vReport,meds:vMeds,set:vSet})[tab]();$('clk').textContent=dk()}
+function popup(){const n=nowM();const L=dueOn(dk()).filter(m=>{const p=pf(m.m),l=lg(m.id),a=tm(m.t);if(!p.popup||a>n||n-a>360)return false;return !l||(l.s==='later'&&n-l.hm>=30)});
+ const o=$('ov');if(!L.length){o.style.display='none';return}o.style.display='block';
+ o.innerHTML='<h1>MEDICINE TIME</h1>'+L.map(m=>`<div class=c><b>${esc(nm(m.m))}</b><br>${esc(m.n)} <small>(${m.t} ${esc(m.w)})</small><br>${btns(m)}</div>`).join('')}
+async function sched(){const LN=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.LocalNotifications;if(!LN)return;try{
+ await LN.requestPermissions();
+ await LN.createChannel({id:'med_alarm',name:'Medicine alarm',importance:5,visibility:1,vibration:true});
+ await LN.createChannel({id:'med_soft',name:'Medicine reminder',importance:4,visibility:1});
+ await LN.registerActionTypes({types:[{id:'MED',actions:[{id:'taken',title:'Already taken'},{id:'taking',title:'Taking'},{id:'later',title:'Will take later'}]}]});
+ const p=await LN.getPending();if(p.notifications.length)await LN.cancel({notifications:p.notifications});const L=[];
+ S.meds.forEach(m=>{const pr=pf(m.m);if(!m.on||m.off||!pr.notify)return;const h=+m.t.split(':')[0],mi=+m.t.split(':')[1];
+  const base={title:'MEDICINE TIME',body:nm(m.m)+': '+m.n+' '+m.w,channelId:pr.alarm?'med_alarm':'med_soft',actionTypeId:'MED',extra:{mid:m.id},schedule:{allowWhileIdle:true}};
+  if(!m.every)L.push(Object.assign({},base,{id:m.id*100,schedule:{on:{hour:h,minute:mi},allowWhileIdle:true}}));
+  else for(let k=0;k<6;k++){const day=new Date(Date.parse(m.from)+(k*m.every)*864e5-19800000);const at=new Date(day.getTime()+(h*60+mi)*6e4);
+   if(at.getTime()>Date.now())L.push(Object.assign({},base,{id:m.id*100+k+1,schedule:{at,allowWhileIdle:true}}))}});
+ if(L.length)await LN.schedule({notifications:L})}catch(e){console.log(e)}}
+function nativeInit(){const LN=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.LocalNotifications;if(!LN)return;
+ LN.addListener('localNotificationActionPerformed',e=>{const id=e.notification.extra&&e.notification.extra.mid;if(!id)return;
+  if(e.actionId==='taken'||e.actionId==='taking'||e.actionId==='later')mark(id,e.actionId);else popup()})}
+setInterval(()=>{if(dk()!==lastDay){lastDay=dk();push();sched()}render();popup()},20000);
+document.addEventListener('visibilitychange',()=>{render();popup()});
+nativeInit();initSync();render();popup();sched();
+</script></body></html>
