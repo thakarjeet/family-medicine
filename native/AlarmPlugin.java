@@ -11,13 +11,15 @@ import org.json.JSONObject;
 import java.util.*;
 @CapacitorPlugin(name = "MedAlarm")
 public class AlarmPlugin extends Plugin {
-  static void set(Context c, int id, long at, String t, String b, boolean daily, boolean strict) {
-    Intent i = new Intent(c, AlarmReceiver.class).putExtra("id", id).putExtra("at", at).putExtra("title", t)
-      .putExtra("body", b).putExtra("daily", daily).putExtra("strict", strict);
-    PendingIntent pi = PendingIntent.getBroadcast(c, id, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-    PendingIntent show = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
-    AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
-    try { am.setAlarmClock(new AlarmManager.AlarmClockInfo(at, show), pi); } catch (SecurityException e) {}
+  static void set(Context c, JSONObject o) {
+    try {
+      int id = o.getInt("id"); long at = o.getLong("at");
+      Intent i = new Intent(c, AlarmReceiver.class).putExtra("j", o.toString());
+      PendingIntent pi = PendingIntent.getBroadcast(c, id, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+      PendingIntent show = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+      AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+      am.setAlarmClock(new AlarmManager.AlarmClockInfo(at, show), pi);
+    } catch (Exception e) {}
   }
   @PluginMethod public void schedule(PluginCall call) {
     Context c = getContext();
@@ -28,15 +30,17 @@ public class AlarmPlugin extends Plugin {
       if (pi != null) am.cancel(pi);
     }
     Set<String> ids = new HashSet<String>();
+    String all = "[]";
     try {
-      JSONArray arr = call.getArray("alarms");
+      JSONArray arr = new JSONArray(call.getArray("alarms").toString());
+      all = arr.toString();
       for (int k = 0; k < arr.length(); k++) {
         JSONObject o = arr.getJSONObject(k);
-        set(c, o.getInt("id"), o.getLong("at"), o.getString("title"), o.getString("body"), o.optBoolean("daily"), o.optBoolean("strict", true));
+        set(c, o);
         ids.add("" + o.getInt("id"));
       }
     } catch (Exception e) {}
-    sp.edit().putStringSet("ids", ids).apply();
+    sp.edit().putStringSet("ids", ids).putString("alarms", all).apply();
     call.resolve();
   }
   @PluginMethod public void stop(PluginCall call) { AlarmReceiver.stop(getContext()); call.resolve(); }

@@ -29,7 +29,7 @@ input[type=checkbox]{width:auto;margin-right:8px}
 </head><body>
 <div id="top"><h1>Family Medicine</h1><small id="clk"></small></div><div id="v"></div><div id="nav"></div><div id="ov"></div>
 <script>
-const FB=window.FB||null;
+const FB=window.FB||null,FAM=window.FAMILY||'main';
 const IST='Asia/Kolkata',$=id=>document.getElementById(id),cap=n=>window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins[n];
 const dk=(d=new Date())=>d.toLocaleDateString('en-CA',{timeZone:IST});
 const nowM=()=>{const p=new Date().toLocaleTimeString('en-GB',{timeZone:IST,hour12:false}).split(':');return +p[0]*60+ +p[1]};
@@ -42,16 +42,16 @@ function seed(){const t=dk();let n=1;const M=[['amar','Amar Thakar'],['lilam','L
  M.forEach(m=>meds.push({id:n++,m:m[0],n:'Vitamin D',t:'09:00',w:'every 15 days',every:15,from:t,on:true}));
  return{members:M.map(m=>({id:m[0],name:m[1]})),meds,logs:{},nid:n,ts:1}}
 let S=JSON.parse(localStorage.S||'null')||seed(),P=JSON.parse(localStorage.P||'{}'),tab='today',lastDay=dk(),db,PS=null;
-const pf=id=>Object.assign({notify:true,alarm:true},P[id]);
+const pf=id=>Object.assign({notify:true,alarm:true,watch:false},P[id]);
 const nm=id=>(S.members.find(m=>m.id===id)||{name:'?'}).name,fn=id=>nm(id).split(' ')[0];
 const COL=['#0f766e','#2563eb','#c026d3','#ea580c','#4f46e5','#0891b2'];
 const av=id=>{const i=Math.max(0,S.members.findIndex(m=>m.id===id));return`<div class=av style="background:${COL[i%6]}">${esc(nm(id)[0])}</div>`};
 function persist(struct){if(struct)S.ts=Date.now();localStorage.S=JSON.stringify(S);localStorage.P=JSON.stringify(P);push();render();if(struct)sched()}
-function push(){if(db)db.doc('family/main').set({j:JSON.stringify(S)}).catch(()=>{})}
+function push(){if(db)db.doc('family/'+FAM).set({j:JSON.stringify(S)}).catch(()=>{})}
 function merge(R){for(const d in R.logs){S.logs[d]=S.logs[d]||{};for(const k in R.logs[d]){const a=S.logs[d][k],b=R.logs[d][k];if(!a||b.t>a.t)S.logs[d][k]=b}}
  if(R.ts>S.ts){S.members=R.members;S.meds=R.meds;S.nid=Math.max(S.nid,R.nid);S.ts=R.ts;sched()}localStorage.S=JSON.stringify(S);render()}
 function initSync(){if(!FB||!window.firebase)return;try{firebase.initializeApp(FB);db=firebase.firestore();
- db.doc('family/main').onSnapshot(s=>{if(s.exists&&!s.metadata.hasPendingWrites)merge(JSON.parse(s.data().j))});push()}catch(e){}}
+ db.doc('family/'+FAM).onSnapshot(s=>{if(s.exists&&!s.metadata.hasPendingWrites)merge(JSON.parse(s.data().j))});push()}catch(e){}}
 const isDue=(m,d)=>{if(d<m.from||(m.off&&d>=m.off))return false;return m.every?Math.round((Date.parse(d)-Date.parse(m.from))/864e5)%m.every===0:true};
 const dueOn=d=>S.meds.filter(m=>isDue(m,d)).sort((a,b)=>tm(a.t)-tm(b.t));
 const lg=(id,d=dk())=>{const l=(S.logs[d]||{})[id];return l&&l.s==='reset'?undefined:l};
@@ -91,10 +91,11 @@ function stop(id){if(!confirm('Stop this medicine from today? History is kept.')
 function refill(id){const m=S.meds.find(x=>x.id===id),v=prompt('How many tablets are in stock now?',m.stock==null?'':m.stock);if(v===null||v==='')return;m.stock=+v;persist(true)}
 function addMed(){const n=$('an').value.trim();if(!n)return alert('Enter a name');S.meds.push({id:S.nid++,m:$('am').value,n,t:$('at').value||'09:00',w:$('aw').value,every:+$('ae').value||0,stock:$('as').value===''?null:+$('as').value,from:dk(),on:true});persist(true)}
 function addMem(){const n=$('nn').value.trim();if(!n)return;S.members.push({id:'m'+Date.now(),name:n});persist(true)}
+function healthHtml(){const N=JSON.parse(localStorage.NA||'null');return`<div class=s style="margin-top:8px">${N&&N.t?'Alarms scheduled: '+N.n+' · next: '+new Date(N.t).toLocaleString('en-IN',{timeZone:IST,weekday:'short',hour:'numeric',minute:'2-digit'}):'No alarms scheduled'}</div><div class=s>For critical medicines, also keep one ordinary phone alarm as a backup.</div>`}
 function vSet(){const ok=x=>x?'<span class="ch g">Allowed</span>':'<span class="ch rd">Needed</span>';const o=(l,k,f)=>`<div class=r>${l} ${PS?ok(PS[k]):''}${PS&&!PS[k]?`<br><button class="bt b2" onclick="cap('MedAlarm').${f}()">Allow</button>`:''}</div>`;
- return`<div class=c><div class=t>Alarm permissions</div><div class=s>Needed once on this phone so the alarm can ring and take over the screen.</div>${cap('MedAlarm')?o('Exact alarms','exact','openExact')+o('Full-screen alerts','fsi','openFsi')+o('Battery: unrestricted','battery','openBattery'):'<div class=s>Install the APK to use these.</div>'}<button class="bt b0" onclick="sched({id:1,at:Date.now()+10000,title:'TEST ALARM',body:'Alarm test',daily:false,strict:true})">Test alarm in 10 seconds</button></div>`+
+ return`<div class=c><div class=t>Alarm permissions</div><div class=s>Needed once on this phone so the alarm can ring and take over the screen.</div>${cap('MedAlarm')?o('Exact alarms','exact','openExact')+o('Full-screen alerts','fsi','openFsi')+o('Battery: unrestricted','battery','openBattery'):'<div class=s>Install the APK to use these.</div>'}${healthHtml()}<button class="bt b0" onclick="sched({id:1,at:Date.now()+10000,title:'TEST ALARM',body:'Alarm test',daily:false,strict:true})">Test alarm in 10 seconds</button></div>`+
  S.members.map(M=>{const p=pf(M.id),c=(k,l)=>`<label style="display:block;padding:6px 0"><input type=checkbox ${p[k]?'checked':''} onchange="setP('${M.id}','${k}',this.checked)">${l}</label>`;
-  return`<div class=c><div class=hd>${av(M.id)}<div class=t>${esc(M.name)}</div></div>${c('notify','Remind on this phone (full-screen MEDICINE TIME)')}${c('alarm','Loud ringing alarm')}</div>`}).join('')+`<div class=c>Live sync: <b>${db?'ON':'OFF (this phone only)'}</b></div>`}
+  return`<div class=c><div class=hd>${av(M.id)}<div class=t>${esc(M.name)}</div></div>${c('notify','Remind on this phone (full-screen MEDICINE TIME)')}${c('alarm','Loud ringing alarm')}${FB?c('watch','Alert me if missed by 45 min (rings on this phone)'):''}</div>`}).join('')+`<div class=c>Live sync: <b>${db?'ON':'OFF (this phone only)'}</b></div><div class=c><span class=s>This app is a reminder tool, not medical advice. Follow your doctor's instructions.</span></div>`}
 function setP(id,k,v){P[id]=Object.assign(pf(id),{[k]:v});persist(true)}
 function render(){const T=[['today','🏠','Today'],['report','📊','Report'],['meds','💊','Medicines'],['set','⏰','Alerts']];
  $('nav').innerHTML=T.map(t=>`<button class="${t[0]===tab?'a':''}" onclick="tab='${t[0]}';render()"><b>${t[1]}</b>${t[2]}</button>`).join('');
@@ -106,10 +107,13 @@ function popup(){const n=nowM();const L=dueOn(dk()).filter(m=>{const a=tm(m.t);r
 async function sched(extra){const MA=cap('MedAlarm');if(!MA)return;const LN=cap('LocalNotifications');
  try{if(LN){await LN.requestPermissions();const p=await LN.getPending();if(p.notifications.length)await LN.cancel({notifications:p.notifications})}}catch(e){}
  const now=Date.now(),im=Date.parse(dk())-19800000,L=[];if(extra&&extra.id)L.push(extra);
- S.meds.forEach(m=>{const p=pf(m.m);if(!m.on||m.off||!p.notify)return;const mi=tm(m.t),ti='MEDICINE TIME',bo=nm(m.m)+': '+m.n+' '+m.w;
-  if(!m.every){let at=im+mi*6e4;if(at<=now+1000)at+=864e5;L.push({id:m.id*100,at,title:ti,body:bo,daily:true,strict:p.alarm})}
-  else for(let k=0;k<6;k++){const at=Date.parse(m.from)-19800000+k*m.every*864e5+mi*6e4;if(at>now)L.push({id:m.id*100+k+1,at,title:ti,body:bo,daily:false,strict:p.alarm})}});
- try{await MA.schedule({alarms:L})}catch(e){}refreshPS()}
+ const W=FB&&db;
+ S.meds.forEach(m=>{const p=pf(m.m);if(!m.on||m.off)return;const mi=tm(m.t),ti='MEDICINE TIME',bo=nm(m.m)+': '+m.n+' '+m.w,wt='MISSED? '+fn(m.m)+' · '+m.n,wb='Not marked 45 min after '+m.t,X={pid:FB&&FB.projectId,key:FB&&FB.apiKey,fam:FAM,med:m.id};
+  const add=(id,da,wa,daily)=>{if(p.notify&&(daily||da>now))L.push({id,at:da,title:ti,body:bo,daily,strict:p.alarm,type:'dose'});
+   if(W&&p.watch&&(daily||wa>now))L.push(Object.assign({id:id+50,at:wa,due:wa-27e5,title:wt,body:wb,daily,strict:p.alarm,type:'watch'},X))};
+  if(!m.every){const t0=im+mi*6e4;let da=t0<=now+1000?t0+864e5:t0,wa=t0+27e5;if(wa<=now+1000)wa+=864e5;add(m.id*100,da,wa,true)}
+  else for(let k=0;k<6;k++){const at=Date.parse(m.from)-19800000+k*m.every*864e5+mi*6e4;add(m.id*100+k+1,at,at+27e5,false)}});
+ try{await MA.schedule({alarms:L})}catch(e){}const R=L.filter(a=>a.id!==1&&a.type==='dose');localStorage.NA=JSON.stringify({n:R.length,t:R.length?Math.min(...R.map(a=>a.at)):0});refreshPS()}
 async function refreshPS(){const MA=cap('MedAlarm');if(!MA)return;try{PS=await MA.status();render()}catch(e){}}
 setInterval(()=>{if(dk()!==lastDay){lastDay=dk();push();sched()}render();popup()},20000);
 document.addEventListener('visibilitychange',()=>{render();popup();refreshPS()});

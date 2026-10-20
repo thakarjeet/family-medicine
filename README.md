@@ -15,6 +15,8 @@ Built with plain HTML, CSS, and JavaScript, wrapped as an Android app with [Capa
 - **Per-phone alert settings:** one phone can turn alerts off for some members and keep them for others.
 - **Live family tracking:** every phone sees what each member has taken in real time.
 - **Reports:** 14-day accuracy ring, on-time percentage, forgot count, streak badges, and a daily bar chart for each member.
+- **Missed-dose alert to another phone:** turn on "Alert me if missed by 45 min" for a member in the Alerts tab. If the dose isn't answered, that phone rings and shows a full-screen alert.
+- **Alarms survive restarts** and the Alerts tab shows when the next alarm is due.
 - **Overdue banner** for doses unanswered for 45+ minutes, and a **Next dose** countdown.
 - **Refill tracker:** tablet counts go down as doses are taken, with a red "refill soon" warning at 5 days left.
 - **Flexible schedules:** daily medicines or every N days (for example, every 15 days).
@@ -53,19 +55,19 @@ FamilyMedicine/
    rules_version = '2';
    service cloud.firestore {
      match /databases/{db}/documents {
-       match /family/main {
-         allow read, write: if true;
+       match /family/{code} {
+         allow get, create, update: if true;
        }
      }
    }
    ```
 4. Open **Project settings**, add a **Web app** (`</>`), and copy the config values.
-5. Open `www/firebase-config.js` and replace `null`:
+5. Open `www/firebase-config.js`, replace `null`, and set a long random `window.FAMILY` code (same on every phone):
    ```js
    window.FB={apiKey:"...",authDomain:"...",projectId:"...",storageBucket:"...",messagingSenderId:"...",appId:"..."};
    ```
 
-> Keep this repository **private**. These rules let anyone who has your config read and write the family data.
+> Keep this repository **private**. The family code works like a secret address for your data, and the rules block listing other documents. Anyone who has both your config and your family code could still read the data.
 
 ### 2. Build the APK
 
@@ -111,10 +113,10 @@ Default medicines are defined in the `seed()` function in `www/index.html`. They
 
 ## Known limits
 
-- After a phone restart, open the app once so alarms are scheduled again.
+- Alarms re-arm after a restart on their own, but open the app once if the phone was off for days.
 - Some brands (Xiaomi, Oppo, Vivo, Realme) have extra autostart or lock-screen permissions that may need turning on.
 - Refill counts assume one tablet per dose and only change when a dose is confirmed in the app.
-- The APK is a debug build for private family use, not a Play Store release.
+- The APK is a debug build for private family use, not a Play Store release. It is signed with the key in `native/family.keystore`, so updates install over the old app.
 
 ---
 

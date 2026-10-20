@@ -16,9 +16,12 @@ jobs:
         run: |
           cp native/*.java android/app/src/main/java/com/thakar/familymedicine/
           M=android/app/src/main/AndroidManifest.xml
-          sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/><uses-permission android:name="android.permission.USE_EXACT_ALARM"/><uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/><uses-permission android:name="android.permission.WAKE_LOCK"/><uses-permission android:name="android.permission.VIBRATE"/><uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/><application|' $M
-          sed -i 's|</application>|<receiver android:name=".AlarmReceiver" android:exported="false"/></application>|' $M
+          sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/><uses-permission android:name="android.permission.USE_EXACT_ALARM"/><uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/><uses-permission android:name="android.permission.WAKE_LOCK"/><uses-permission android:name="android.permission.VIBRATE"/><uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/><uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/><application|' $M
+          sed -i 's|</application>|<receiver android:name=".AlarmReceiver" android:exported="false"/><receiver android:name=".BootReceiver" android:exported="true"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver></application>|' $M
           sed -i '0,/<activity/s|<activity|<activity android:showWhenLocked="true" android:turnScreenOn="true"|' $M
+      - name: Sign with the family key
+        run: |
+          sed -i "0,/^android {/s|^android {|android {\n    signingConfigs {\n        debug {\n            storeFile file('../../native/family.keystore')\n            storePassword 'familymed'\n            keyAlias 'family'\n            keyPassword 'familymed'\n        }\n    }|" android/app/build.gradle
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:

@@ -4,6 +4,11 @@ import android.content.*;
 import android.media.*;
 import android.os.*;
 import androidx.core.app.NotificationCompat;
+import org.json.JSONObject;
+import java.io.*;
+import java.net.*;
+import java.text.SimpleDateFormat;
+import java.util.*;
 public class AlarmReceiver extends BroadcastReceiver {
   static MediaPlayer mp; static Vibrator vb;
   static void stopSound() {
@@ -15,11 +20,45 @@ public class AlarmReceiver extends BroadcastReceiver {
     stopSound();
     ((NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE)).cancelAll();
   }
-  @Override public void onReceive(Context c, Intent i) {
-    int id = i.getIntExtra("id", 0); long at = i.getLongExtra("at", 0);
-    String t = i.getStringExtra("title"), b = i.getStringExtra("body");
-    boolean strict = i.getBooleanExtra("strict", true);
-    if (i.getBooleanExtra("daily", false)) AlarmPlugin.set(c, id, at + 86400000L, t, b, true, strict);
+  static boolean answered(JSONObject o) {
+    try {
+      URL u = new URL("https://firestore.googleapis.com/v1/projects/" + o.getString("pid") + "/databases/(default)/documents/family/" + o.getString("fam") + "?key=" + o.getString("key"));
+      HttpURLConnection h = (HttpURLConnection) u.openConnection();
+      h.setConnectTimeout(8000); h.setReadTimeout(8000);
+      BufferedReader r = new BufferedReader(new InputStreamReader(h.getInputStream()));
+      StringBuilder sb = new StringBuilder(); String ln;
+      while ((ln = r.readLine()) != null) sb.append(ln);
+      r.close();
+      JSONObject S = new JSONObject(new JSONObject(sb.toString()).getJSONObject("fields").getJSONObject("j").getString("stringValue"));
+      SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+      f.setTimeZone(TimeZone.getTimeZone("Asia/Kolkata"));
+      String day = f.format(new Date(o.getLong("due")));
+      String s = S.getJSONObject("logs").getJSONObject(day).getJSONObject("" + o.getInt("med")).getString("s");
+      return !s.equals("reset");
+    } catch (Exception e) { return false; }
+  }
+  @Override public void onReceive(final Context c, Intent i) {
+    final JSONObject o;
+    try { o = new JSONObject(i.getStringExtra("j")); } catch (Exception e) { return; }
+    try {
+      if (o.optBoolean("daily")) {
+        JSONObject n = new JSONObject(o.toString());
+        n.put("at", o.getLong("at") + 86400000L);
+        if (n.has("due")) n.put("due", o.getLong("due") + 86400000L);
+        AlarmPlugin.set(c, n);
+      }
+    } catch (Exception e) {}
+    if ("watch".equals(o.optString("type"))) {
+      final PendingResult pr = goAsync();
+      new Thread(() -> { try { if (!answered(o)) fire(c, o); } finally { pr.finish(); } }).start();
+      return;
+    }
+    fire(c, o);
+  }
+  static void fire(Context c, JSONObject o) {
+    int id = o.optInt("id");
+    String t = o.optString("title"), b = o.optString("body");
+    boolean strict = o.optBoolean("strict", true);
     NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
     if (Build.VERSION.SDK_INT >= 26) {
       NotificationChannel ch = new NotificationChannel("med_alarm2", "Medicine alarm", NotificationManager.IMPORTANCE_HIGH);
