@@ -54,15 +54,20 @@ function initSync(){if(!FB||!window.firebase)return;try{firebase.initializeApp(F
  db.doc('family/main').onSnapshot(s=>{if(s.exists&&!s.metadata.hasPendingWrites)merge(JSON.parse(s.data().j))});push()}catch(e){}}
 const isDue=(m,d)=>{if(d<m.from||(m.off&&d>=m.off))return false;return m.every?Math.round((Date.parse(d)-Date.parse(m.from))/864e5)%m.every===0:true};
 const dueOn=d=>S.meds.filter(m=>isDue(m,d)).sort((a,b)=>tm(a.t)-tm(b.t));
-const lg=(id,d=dk())=>(S.logs[d]||{})[id];
+const lg=(id,d=dk())=>{const l=(S.logs[d]||{})[id];return l&&l.s==='reset'?undefined:l};
 const done=l=>l&&(l.s==='taken'||l.s==='taking');
 function mark(id,s,d=dk()){const m=S.meds.find(x=>x.id===id);const was=done(lg(id,d));S.logs[d]=S.logs[d]||{};S.logs[d][id]={s,t:Date.now(),hm:nowM()};
  const now=s==='taken'||s==='taking';if(m&&m.stock!=null){if(!was&&now)m.stock=Math.max(0,m.stock-1);if(was&&!now)m.stock++}
  const MA=cap('MedAlarm');if(MA)MA.stop();persist(true);popup()}
+const LB={taken:'Already taken',taking:'Taking',forgot:'Forgot (counts as missed)'};
+function ask(id,s){const m=S.meds.find(x=>x.id===id);if(confirm(fn(m.m)+' · '+m.n+'\n\nMark as: '+LB[s]+'?'))mark(id,s)}
+function undo(id){const m=S.meds.find(x=>x.id===id);if(!confirm('Reset '+fn(m.m)+' · '+m.n+' back to pending?'))return;
+ if(done(lg(id))&&m.stock!=null)m.stock++;S.logs[dk()][id]={s:'reset',t:Date.now(),hm:nowM()};persist(true);popup()}
+const acts=m=>lg(m.id)?`<button class="bt b0" onclick="undo(${m.id})">Change answer</button>`:(tm(m.t)-60>nowM()?'<span class=s>Buttons unlock 1 hour before this dose</span>':btns(m));
 const stat=m=>{const l=lg(m.id);if(!l)return tm(m.t)<nowM()?'<span class="ch y">Pending</span>':'<span class="ch gr">Upcoming</span>';
  return({taken:'<span class="ch g">Taken</span>',taking:'<span class="ch g">Taking</span>',forgot:'<span class="ch rd">Forgot · missed</span>'})[l.s]||''};
 const stk=m=>{if(m.stock==null)return'';const d=m.every?m.stock*m.every:m.stock;return`<span class="ch ${d<=5?'rd':'gr'}">${m.stock} left${d<=5?' · refill soon':''}</span>`};
-const btns=m=>`<button class="bt b1" onclick="mark(${m.id},'taken')">✔ Already taken</button><button class="bt b2" onclick="mark(${m.id},'taking')">💊 Taking</button><button class="bt b3" onclick="mark(${m.id},'forgot')">😬 Forgot</button>`;
+const btns=m=>`<button class="bt b1" onclick="ask(${m.id},'taken')">✔ Already taken</button><button class="bt b2" onclick="ask(${m.id},'taking')">💊 Taking</button><button class="bt b3" onclick="ask(${m.id},'forgot')">😬 Forgot</button>`;
 function vToday(){const n=nowM(),d=dueOn(dk());let h='';
  if(cap('MedAlarm')&&PS&&(!PS.exact||!PS.fsi||!PS.battery))h+=`<div class=c style="background:#fef3c7"><b>Finish alarm setup</b><div class=s>Open the Alerts tab and allow the 3 permissions so the alarm can ring and take over the screen.</div></div>`;
  const od=d.filter(m=>!lg(m.id)&&tm(m.t)+45<=n);
@@ -70,7 +75,7 @@ function vToday(){const n=nowM(),d=dueOn(dk());let h='';
  const nx=d.find(m=>!lg(m.id)&&tm(m.t)>n);if(nx){const x=tm(nx.t)-n;h+=`<div class=c><span class=s>Next dose</span><div class=t>${esc(fn(nx.m))} · ${esc(nx.n)}</div><div class=s>at ${nx.t} · in ${Math.floor(x/60)}h ${x%60}m</div></div>`}
  return h+S.members.map(M=>{const L=d.filter(m=>m.m===M.id),k=L.filter(m=>done(lg(m.id))).length;
   return`<div class=c><div class=hd>${av(M.id)}<div style="flex:1"><div class=t>${esc(M.name)}</div><div class=s>${k} of ${L.length} taken today</div><div class=pb><i style="width:${L.length?k/L.length*100:0}%"></i></div></div></div>`+
-  L.map(m=>`<div class=r><span class=s>${m.t}</span> <span class=t>${esc(m.n)}</span> <span class=s>${esc(m.w)}</span><br>${stat(m)}${stk(m)}<br>${btns(m)}</div>`).join('')+'</div>'}).join('')}
+  L.map(m=>`<div class=r><span class=s>${m.t}</span> <span class=t>${esc(m.n)}</span> <span class=s>${esc(m.w)}</span><br>${stat(m)}${stk(m)}<br>${acts(m)}</div>`).join('')+'</div>'}).join('')}
 function rep(id){let sch=0,tk=0,ot=0,fg=0,days=[],streak=0,broke=false;
  for(let i=13;i>=0;i--){const d=back(i);let s=0,t=0;dueOn(d).filter(m=>m.m===id).forEach(m=>{if(i===0&&tm(m.t)>nowM())return;s++;const l=lg(m.id,d);if(l&&l.s==='forgot')fg++;if(done(l)){t++;if(l.hm-tm(m.t)<=60||dk(new Date(l.t))!==d)ot++}});sch+=s;tk+=t;days.push(s?t/s:null)}
  for(let i=1;i<14&&!broke;i++){const x=days[13-i];if(x===null)continue;if(x===1)streak++;else broke=true}
